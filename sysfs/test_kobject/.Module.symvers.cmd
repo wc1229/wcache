@@ -1,0 +1,1 @@
+cmd_/home/wc1229/pdlab/sysfs/test_kobject/Module.symvers := sed 's/ko$$/o/' /home/wc1229/pdlab/sysfs/test_kobject/modules.order | scripts/mod/modpost -m -a   -o /home/wc1229/pdlab/sysfs/test_kobject/Module.symvers -e -i Module.symvers   -T -

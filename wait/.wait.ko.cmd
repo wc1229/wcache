@@ -1,0 +1,1 @@
+cmd_/home/wc1229/pdlab/wait/wait.ko := ld -r -m elf_x86_64  --build-id  -T ./scripts/module-common.lds -o /home/wc1229/pdlab/wait/wait.ko /home/wc1229/pdlab/wait/wait.o /home/wc1229/pdlab/wait/wait.mod.o;  true
