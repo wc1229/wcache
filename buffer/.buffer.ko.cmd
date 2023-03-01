@@ -1,1 +1,0 @@
-cmd_/home/wc1229/pdlab/buffer/buffer.ko := ld -r -m elf_x86_64  --build-id  -T ./scripts/module-common.lds -o /home/wc1229/pdlab/buffer/buffer.ko /home/wc1229/pdlab/buffer/buffer.o /home/wc1229/pdlab/buffer/buffer.mod.o;  true

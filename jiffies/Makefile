@@ -1,7 +1,7 @@
-#makefile for the wcache.c
+#makefile for the jiffies.c
 
-obj-m := wcache.o
-CURRENT_PATH = /home/wc1229/pdlab/wcache
+obj-m := jiffies.o
+CURRENT_PATH = /home/wc1229/pdlab/jiffies
 LINUX_KERNEL := $(shell uname -r)
 LINUX_KERNEL_PATH := /home/wc1229/kernel/linux-5.9
 all:

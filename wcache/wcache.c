@@ -9,6 +9,8 @@
 #include <linux/string.h>
 #include <linux/slab.h>
 #include <linux/sysfs.h>
+#include <linux/timer.h>
+#include <linux/delay.h> 
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("wc1229");
@@ -30,6 +32,7 @@ typedef struct object {
     void  *data;
     size_t  size;
     char *path;
+    unsigned long time;
     struct list_head list;
 }obj;
 
@@ -45,9 +48,14 @@ static LIST_HEAD(obj_list);
 
 //创建节点
 static void obj_create(char name[], void *data, size_t size, char path[]) {
-    if(size > free_space) return;
-    
     obj *new_obj = kmalloc(sizeof(obj),GFP_KERNEL);
+
+    if(size > free_space) {
+        kfree(new_obj);
+        printk(KERN_INFO"Insufficient buffer space, object %s creation failed",name);
+        return;
+    }
+    
     printk(KERN_INFO"start create a object\n");
     if(!new_obj){
         printk(KERN_INFO"malloc faild\n");
@@ -57,10 +65,11 @@ static void obj_create(char name[], void *data, size_t size, char path[]) {
     new_obj->data = img;
     new_obj->size = size;
     new_obj->path = path;
+    new_obj->time = jiffies;
 
     INIT_LIST_HEAD(&new_obj->list);
     list_add_tail(&new_obj->list,&obj_list);
-    printk(KERN_INFO"create a object success; name:%s; size:%zu;path:%s\n", name, size, path);
+    printk(KERN_INFO"create a object success; name:%s; size:%zu;path:%s;time:%ld\n", new_obj->name, new_obj->size, new_obj->path, new_obj->time);
 
     used_space += new_obj->size;
     free_space = buffer_size -  used_space;
@@ -116,6 +125,7 @@ int __init list_init(void)
     img = vmalloc_user(IMG_SIZE);
 
     obj_create(web_name, web, WEB_SIZE, web_path);
+    msleep(1000);
     obj_create(img_name,  img, IMG_SIZE,  img_path);
 
     my_buffer_kobj = kobject_create_and_add("my_buffer", kernel_kobj);

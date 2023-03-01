@@ -1,1 +1,0 @@
-cmd_/home/wc1229/pdlab/sysfs/test_kobject_default_attr/test_kobject_default_attr.mod := { echo  /home/wc1229/pdlab/sysfs/test_kobject_default_attr/test_kobject_default_attr.o; echo; } > /home/wc1229/pdlab/sysfs/test_kobject_default_attr/test_kobject_default_attr.mod

@@ -1,1 +1,0 @@
-cmd_/home/wc1229/pdlab/list/list.ko := ld -r -m elf_x86_64  --build-id  -T ./scripts/module-common.lds -o /home/wc1229/pdlab/list/list.ko /home/wc1229/pdlab/list/list.o /home/wc1229/pdlab/list/list.mod.o;  true

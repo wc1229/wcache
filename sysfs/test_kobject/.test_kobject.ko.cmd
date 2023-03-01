@@ -1,1 +1,0 @@
-cmd_/home/wc1229/pdlab/sysfs/test_kobject/test_kobject.ko := ld -r -m elf_x86_64  --build-id  -T ./scripts/module-common.lds -o /home/wc1229/pdlab/sysfs/test_kobject/test_kobject.ko /home/wc1229/pdlab/sysfs/test_kobject/test_kobject.o /home/wc1229/pdlab/sysfs/test_kobject/test_kobject.mod.o;  true

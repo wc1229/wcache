@@ -1,1 +1,0 @@
-cmd_/home/wc1229/pdlab/wcache/Module.symvers := sed 's/ko$$/o/' /home/wc1229/pdlab/wcache/modules.order | scripts/mod/modpost -m -a   -o /home/wc1229/pdlab/wcache/Module.symvers -e -i Module.symvers   -T -
