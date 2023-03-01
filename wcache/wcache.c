@@ -11,6 +11,7 @@
 #include <linux/sysfs.h>
 #include <linux/timer.h>
 #include <linux/delay.h> 
+// #include <string.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("wc1229");
@@ -79,6 +80,18 @@ static void obj_create(char name[], void *data, size_t size, char path[]) {
     printk(KERN_INFO"obj_count:%d\n", obj_count);
 }
 
+static void obj_callback(char path[]){
+    obj *object;
+    list_for_each_entry(object, &obj_list, list){
+        if(!strcmp(path, object->path)){
+            object->time = jiffies;
+            printk("The object exists with the name %s, Access time updated to %ld", object->name, object->time);
+            return;
+        }
+    }
+    printk("The object does not exist\n");
+}
+
 //创建kobject
 static ssize_t buffer_size_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -127,6 +140,8 @@ int __init list_init(void)
     obj_create(web_name, web, WEB_SIZE, web_path);
     msleep(1000);
     obj_create(img_name,  img, IMG_SIZE,  img_path);
+    msleep(1000);
+    obj_callback(img_path);
 
     my_buffer_kobj = kobject_create_and_add("my_buffer", kernel_kobj);
     if (!my_buffer_kobj)
