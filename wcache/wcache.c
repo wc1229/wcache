@@ -17,16 +17,17 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("wc1229");
 MODULE_DESCRIPTION("A kernel module to allocate a 100MB buffer and store struct objects in a linked list.");
 
-#define BUFFER_SIZE 1024*1024*100   //定义缓存区空间具体大小
-
 static struct kobject *my_buffer_kobj;
 
-static size_t buffer_size = BUFFER_SIZE;    //缓存区空间
-static size_t used_space = 0;                    //已使用空间
-static size_t free_space = BUFFER_SIZE;    //未使用空间
-static int obj_count = 0;                            //内容对象个数
+#define BUFFER_SIZE 1024*1024*100   //定义缓存区空间具体大小
 
-typedef struct object {                               //内容对象结构体
+static size_t buffer_size = BUFFER_SIZE;
+static size_t used_space = 0;
+static size_t free_space = BUFFER_SIZE;
+static int obj_count = 0;
+
+/*内容对象结构体*/
+typedef struct object {
     char *name;
     void  *data;
     size_t  size;
