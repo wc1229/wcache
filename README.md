@@ -1,2 +1,2 @@
 # wcache
-A Linux kernel program that monitors http requests and server responses sent to the target server, builds a server response content cache, and implements replacement.
+一个Linux内核程序，监控发往目标服务器的http请求和服务器响应，建立服务器响应内容缓存，并实现LRU替换。在服务器再次请求缓存内容时，拦截该请求并直接返回该内容。
