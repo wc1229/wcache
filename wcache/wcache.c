@@ -11,6 +11,7 @@
 #include <linux/sysfs.h>
 #include <linux/timer.h>
 #include <linux/delay.h> 
+#include <linux/rbtree.h>
 // #include <string.h>
 
 MODULE_LICENSE("GPL");
@@ -20,6 +21,8 @@ MODULE_DESCRIPTION("A kernel module to allocate a 100MB cache and store struct o
 static struct kobject *my_cache_kobj;
 
 #define CACHE_SIZE 1024*1024*100   //定义缓存区空间具体大小
+#define FALSE 0
+#define TRUE 1
 
 static size_t cache_size = CACHE_SIZE;
 static size_t used_space = 0;
@@ -33,7 +36,7 @@ typedef struct object {
     size_t  size;
     char *path;
     unsigned long time;
-    struct list_head list;
+    struct rb_node node;
 }obj;
 
 static void  *web;
@@ -44,7 +47,29 @@ static void  *img;
 static char  img_name[] = "img", img_path[] = "wc1229/path/img";
 #define IMG_SIZE (512)
 
-static LIST_HEAD(obj_list);
+// static LIST_HEAD(obj_list);
+struct rb_root obj_tree = RB_ROOT;
+
+/*红黑树插入数据*/
+int node_insert(struct rb_root *root, obj *data) {
+    struct rb_node **new = &(root->rb_node), *parent = NULL;
+    /* 查询放置节点的位置 */
+    while (*new) {
+        obj *this = container_of(*new, obj, node);
+        int result = data->time - this->time;
+        parent = *new;
+        if (result < 0)
+            new = &((*new)->rb_left);
+        else if (result > 0)
+            new = &((*new)->rb_right);
+        else
+            return FALSE;
+    }
+    /* 增加新节点并调整树 */
+    rb_link_node(&data->node, parent, new);
+    rb_insert_color(&data->node, root);
+    return TRUE;
+}
 
 /*创建一个内容对象*/
 static void obj_create(char name[], void *data, size_t size, char path[]) {
@@ -72,8 +97,9 @@ static void obj_create(char name[], void *data, size_t size, char path[]) {
     new_obj->time = jiffies;
 
     /*将新建的节点添加到列表*/
-    INIT_LIST_HEAD(&new_obj->list);
-    list_add_tail(&new_obj->list,&obj_list);
+    if(! node_insert(&obj_tree, new_obj) ){
+        printk(KERN_INFO"object %s insert failed",name);
+    }
     printk(KERN_INFO"create a object success; name:%s; size:%zu;path:%s;time:%ld\n", new_obj->name, new_obj->size, new_obj->path, new_obj->time);
 
     /*更新缓存区信息*/
@@ -83,10 +109,12 @@ static void obj_create(char name[], void *data, size_t size, char path[]) {
 }
 
 static void obj_callback(char path[]){
-    obj *object;
     /*遍历链表，根据路径找到内容对象，输出内容名字，更新访问时间*/
-    list_for_each_entry(object, &obj_list, list){
-        if(!strcmp(path, object->path)){
+    obj *object;
+    struct rb_node *node;
+    for (node = rb_first(&obj_tree); node; node = rb_next(node)){
+        if(!strcmp(path, rb_entry(node, obj, node)->path)){
+            object = rb_entry(node, obj, node);
             object->time = jiffies;
             printk("The object exists with the name %s, Access time updated to %ld", object->name, object->time);
             return;
@@ -136,7 +164,7 @@ static struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
-int __init list_init(void)
+int __init wcache_init(void)
 {
     int ret;
 
@@ -160,15 +188,19 @@ int __init list_init(void)
     return 0;
 }
 
-void __exit list_exit(void)
+void __exit wcache_exit(void)
 {
-    /*释放链表*/
-    obj *pos, *next;
-
-    list_for_each_entry_safe(pos, next, &obj_list, list) {
-        list_del(&pos->list);
-        kfree(pos);
-        printk(KERN_INFO "Linked list freed successfully.\n");
+    /*释放树*/
+    obj *object;
+    struct rb_node *node;
+    for (node = rb_first(&obj_tree); node; node = rb_next(node)){
+        if(rb_entry(node, obj, node)){
+            object = rb_entry(node, obj, node);
+            if(object->data)vfree(object->data);
+            rb_erase(&object->node, &obj_tree);
+            kfree(object);
+            printk("The object freed successfully");
+        }
     }
 
     /*释放图片对象内存*/
@@ -187,6 +219,6 @@ void __exit list_exit(void)
     kobject_put(my_cache_kobj);
 }
 
-module_init(list_init);
-module_exit(list_exit);
+module_init(wcache_init);
+module_exit(wcache_exit);
 
