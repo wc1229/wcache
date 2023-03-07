@@ -15,15 +15,15 @@
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("wc1229");
-MODULE_DESCRIPTION("A kernel module to allocate a 100MB buffer and store struct objects in a linked list.");
+MODULE_DESCRIPTION("A kernel module to allocate a 100MB cache and store struct objects in a linked list.");
 
-static struct kobject *my_buffer_kobj;
+static struct kobject *my_cache_kobj;
 
-#define BUFFER_SIZE 1024*1024*100   //定义缓存区空间具体大小
+#define CACHE_SIZE 1024*1024*100   //定义缓存区空间具体大小
 
-static size_t buffer_size = BUFFER_SIZE;
+static size_t cache_size = CACHE_SIZE;
 static size_t used_space = 0;
-static size_t free_space = BUFFER_SIZE;
+static size_t free_space = CACHE_SIZE;
 static int obj_count = 0;
 
 /*内容对象结构体*/
@@ -49,6 +49,7 @@ static LIST_HEAD(obj_list);
 /*创建一个内容对象*/
 static void obj_create(char name[], void *data, size_t size, char path[]) {
     /*为内容对象分配内存*/
+    void *buffer = vmalloc(size);
     obj *new_obj = kmalloc(sizeof(obj),GFP_KERNEL);
     printk(KERN_INFO"start create a object\n");
     if(!new_obj){
@@ -58,13 +59,14 @@ static void obj_create(char name[], void *data, size_t size, char path[]) {
     /*判断缓存区是否够用*/
     if(size > free_space) {
         kfree(new_obj);
-        printk(KERN_INFO"Insufficient buffer space, object %s creation failed",name);
+        printk(KERN_INFO"Insufficient cache space, object %s creation failed",name);
         return;
     }
     
     /*将内容信息存到对象*/
+    memcpy(buffer, data, size);
     new_obj->name = name;
-    new_obj->data = img;
+    new_obj->data = buffer;
     new_obj->size = size;
     new_obj->path = path;
     new_obj->time = jiffies;
@@ -76,7 +78,7 @@ static void obj_create(char name[], void *data, size_t size, char path[]) {
 
     /*更新缓存区信息*/
     used_space += new_obj->size;
-    free_space = buffer_size -  used_space;
+    free_space = cache_size -  used_space;
     obj_count++;
 }
 
@@ -94,9 +96,9 @@ static void obj_callback(char path[]){
 }
 
 /*缓存区空间属性读取*/
-static ssize_t buffer_size_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+static ssize_t cache_size_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-    return sprintf(buf, "%zu\n", buffer_size);
+    return sprintf(buf, "%zu\n", cache_size);
 }
 /*已使用空间属性读取*/
 static ssize_t used_space_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
@@ -115,14 +117,14 @@ static ssize_t obj_count_show(struct kobject *kobj, struct kobj_attribute *attr,
 }
 
 /*定义属性*/
-static struct kobj_attribute buffer_size_attr = __ATTR(buffer_size, 0444, buffer_size_show, NULL);
+static struct kobj_attribute cache_size_attr = __ATTR(cache_size, 0444, cache_size_show, NULL);
 static struct kobj_attribute used_space_attr = __ATTR(used_space, 0444, used_space_show, NULL);
 static struct kobj_attribute free_space_attr = __ATTR(free_space, 0444, free_space_show, NULL);
 static struct kobj_attribute obj_count_attr = __ATTR(obj_count, 0444, obj_count_show, NULL);
 
 /*使属性组指向所有属性*/
 static struct attribute *attrs[] = {
-    &buffer_size_attr.attr,
+    &cache_size_attr.attr,
     &used_space_attr.attr,
     &free_space_attr.attr,
     &obj_count_attr.attr,
@@ -147,13 +149,13 @@ int __init list_init(void)
     msleep(1000);
     obj_callback(img_path);
 
-    my_buffer_kobj = kobject_create_and_add("my_buffer", kernel_kobj);
-    if (!my_buffer_kobj)
+    my_cache_kobj = kobject_create_and_add("wcache", kernel_kobj);
+    if (!my_cache_kobj)
         return -ENOMEM;
 
-    ret = sysfs_create_group(my_buffer_kobj, &attr_group);
+    ret = sysfs_create_group(my_cache_kobj, &attr_group);
     if (ret)
-        kobject_put(my_buffer_kobj);
+        kobject_put(my_cache_kobj);
 
     return 0;
 }
@@ -181,8 +183,8 @@ void __exit list_exit(void)
         printk(KERN_INFO "web freed successfully using vfree().\n");
     }
 
-    sysfs_remove_group(my_buffer_kobj, &attr_group);
-    kobject_put(my_buffer_kobj);
+    sysfs_remove_group(my_cache_kobj, &attr_group);
+    kobject_put(my_cache_kobj);
 }
 
 module_init(list_init);
