@@ -13,108 +13,23 @@
 #include <linux/timer.h>
 #include <linux/delay.h> 
 #include <linux/rbtree.h>
+#include "wcache.h"
 #include "sysfs.h"
+#include "rb_tree.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("wc1229");
 MODULE_DESCRIPTION("A kernel module to allocate a 100MB cache and store struct objects in a linked list.");
 
-#define FALSE 0
-#define TRUE 1
-
-/*内容对象结构体*/
-typedef struct object {
-    char *name;
-    void  *data;
-    size_t  size;
-    char *path;
-    unsigned long time;
-    struct rb_node node;
-}obj;
-
-static void  *web;
-static char  web_name[] = "web", web_path[] = "wc1229/path/web";
+void  *web;
+char  web_name[] = "web", web_path[] = "wc1229/path/web";
 #define WEB_SIZE (256)
 
-static void  *img;
-static char  img_name[] = "img", img_path[] = "wc1229/path/img";
+void  *img;
+char  img_name[] = "img", img_path[] = "wc1229/path/img";
 #define IMG_SIZE (512)
 
-// static LIST_HEAD(obj_list);
 struct rb_root obj_tree = RB_ROOT;
-
-/*红黑树插入数据*/
-int node_insert(struct rb_root *root, obj *data) {
-    struct rb_node **new = &(root->rb_node), *parent = NULL;
-    /* 查询放置节点的位置 */
-    while (*new) {
-        obj *this = container_of(*new, obj, node);
-        int result = data->time - this->time;
-        parent = *new;
-        if (result < 0)
-            new = &((*new)->rb_left);
-        else if (result > 0)
-            new = &((*new)->rb_right);
-        else
-            return FALSE;
-    }
-    /* 增加新节点并调整树 */
-    rb_link_node(&data->node, parent, new);
-    rb_insert_color(&data->node, root);
-    return TRUE;
-}
-
-/*创建一个内容对象*/
-static void obj_create(char name[], void *data, size_t size, char path[]) {
-    /*为内容对象分配内存*/
-    void *buffer = vmalloc(size);
-    obj *new_obj = kmalloc(sizeof(obj),GFP_KERNEL);
-    printk(KERN_INFO"start create a object\n");
-    if(!new_obj){
-        printk(KERN_INFO"malloc faild\n");
-    }
-
-    /*判断缓存区是否够用*/
-    if(size > free_space) {
-        kfree(new_obj);
-        printk(KERN_INFO"Insufficient cache space, object %s creation failed",name);
-        return;
-    }
-    
-    /*将内容信息存到对象*/
-    memcpy(buffer, data, size);
-    new_obj->name = name;
-    new_obj->data = buffer;
-    new_obj->size = size;
-    new_obj->path = path;
-    new_obj->time = jiffies;
-
-    /*将新建的节点添加到列表*/
-    if(! node_insert(&obj_tree, new_obj) ){
-        printk(KERN_INFO"object %s insert failed",name);
-    }
-    printk(KERN_INFO"create a object success; name:%s; size:%zu;path:%s;time:%ld\n", new_obj->name, new_obj->size, new_obj->path, new_obj->time);
-
-    /*更新缓存区信息*/
-    used_space += new_obj->size;
-    free_space = cache_size -  used_space;
-    obj_count++;
-}
-
-static void obj_callback(char path[]){
-    /*遍历链表，根据路径找到内容对象，输出内容名字，更新访问时间*/
-    obj *object;
-    struct rb_node *node;
-    for (node = rb_first(&obj_tree); node; node = rb_next(node)){
-        if(!strcmp(path, rb_entry(node, obj, node)->path)){
-            object = rb_entry(node, obj, node);
-            object->time = jiffies;
-            printk("The object exists with the name %s, Access time updated to %ld", object->name, object->time);
-            return;
-        }
-    }
-    printk("The object does not exist\n");
-}
 
 int __init wcache_init(void)
 {
@@ -127,7 +42,7 @@ int __init wcache_init(void)
     msleep(1000);
     obj_create(img_name,  img, IMG_SIZE,  img_path);
     msleep(1000);
-    obj_callback(img_path);
+    obj_search(img_path);
 
     my_cache_kobj = kobject_create_and_add("wcache", kernel_kobj);
     if (!my_cache_kobj)
@@ -148,10 +63,9 @@ void __exit wcache_exit(void)
     for (node = rb_first(&obj_tree); node; node = rb_next(node)){
         if(rb_entry(node, obj, node)){
             object = rb_entry(node, obj, node);
-            if(object->data)vfree(object->data);
-            rb_erase(&object->node, &obj_tree);
-            kfree(object);
-            printk("The object freed successfully");
+            if(node_delete(obj_tree, object)){
+                printk("The object freed successfully");
+            }
         }
     }
 
