@@ -63,9 +63,8 @@ void __exit wcache_exit(void)
     for (node = rb_first(&obj_tree); node; node = rb_next(node)){
         if(rb_entry(node, obj, node)){
             object = rb_entry(node, obj, node);
-            if(node_delete(obj_tree, object)){
-                printk("The object freed successfully");
-            }
+            node_delete(object->path);
+            printk("The object freed successfully");
         }
     }
 
