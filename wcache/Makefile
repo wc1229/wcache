@@ -1,6 +1,8 @@
 #makefile for the wcache.c
 
-obj-m := wcache.o
+obj-m := cache.o
+cache-objs := wcache.o sysfs.o
+
 CURRENT_PATH = /home/wc1229/pdlab/wcache
 LINUX_KERNEL := $(shell uname -r)
 LINUX_KERNEL_PATH := /home/wc1229/kernel/linux-5.9

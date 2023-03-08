@@ -2,6 +2,7 @@
  * file name:wcache.c
  */
 
+// #include <string.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -12,22 +13,14 @@
 #include <linux/timer.h>
 #include <linux/delay.h> 
 #include <linux/rbtree.h>
-// #include <string.h>
+#include "sysfs.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("wc1229");
 MODULE_DESCRIPTION("A kernel module to allocate a 100MB cache and store struct objects in a linked list.");
 
-static struct kobject *my_cache_kobj;
-
-#define CACHE_SIZE 1024*1024*100   //定义缓存区空间具体大小
 #define FALSE 0
 #define TRUE 1
-
-static size_t cache_size = CACHE_SIZE;
-static size_t used_space = 0;
-static size_t free_space = CACHE_SIZE;
-static int obj_count = 0;
 
 /*内容对象结构体*/
 typedef struct object {
@@ -122,47 +115,6 @@ static void obj_callback(char path[]){
     }
     printk("The object does not exist\n");
 }
-
-/*缓存区空间属性读取*/
-static ssize_t cache_size_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-    return sprintf(buf, "%zu\n", cache_size);
-}
-/*已使用空间属性读取*/
-static ssize_t used_space_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-    return sprintf(buf, "%zu\n", used_space);
-}
-/*未使用空间属性读取*/
-static ssize_t free_space_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-    return sprintf(buf, "%zu\n", free_space);
-}
-/*内容对象个数属性读取*/
-static ssize_t obj_count_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-    return sprintf(buf, "%d\n", obj_count);
-}
-
-/*定义属性*/
-static struct kobj_attribute cache_size_attr = __ATTR(cache_size, 0444, cache_size_show, NULL);
-static struct kobj_attribute used_space_attr = __ATTR(used_space, 0444, used_space_show, NULL);
-static struct kobj_attribute free_space_attr = __ATTR(free_space, 0444, free_space_show, NULL);
-static struct kobj_attribute obj_count_attr = __ATTR(obj_count, 0444, obj_count_show, NULL);
-
-/*使属性组指向所有属性*/
-static struct attribute *attrs[] = {
-    &cache_size_attr.attr,
-    &used_space_attr.attr,
-    &free_space_attr.attr,
-    &obj_count_attr.attr,
-    NULL,
-};
-
-/*定义属性组*/
-static struct attribute_group attr_group = {
-    .attrs = attrs,
-};
 
 int __init wcache_init(void)
 {
