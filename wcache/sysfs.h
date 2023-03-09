@@ -31,4 +31,8 @@ extern struct attribute *attrs[];
 /*定义属性组*/
 extern struct attribute_group attr_group;
 
+extern void create_sysfs(void);
+
+extern void free_sysfs(void);
+
 #endif

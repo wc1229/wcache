@@ -51,4 +51,16 @@ struct attribute_group attr_group = {
     .attrs = attrs,
 };
 
+void create_sysfs(void){
+    int ret;
+    my_cache_kobj = kobject_create_and_add("wcache", kernel_kobj);
 
+    ret = sysfs_create_group(my_cache_kobj, &attr_group);
+    if (ret)
+        kobject_put(my_cache_kobj);
+}
+
+void free_sysfs(void){
+    sysfs_remove_group(my_cache_kobj, &attr_group);
+    kobject_put(my_cache_kobj);
+}

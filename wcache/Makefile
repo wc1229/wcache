@@ -1,7 +1,7 @@
 #makefile for the wcache.c
 
 obj-m := cache.o
-cache-objs := wcache.o sysfs.o rb_tree.o
+cache-objs := wcache.o sysfs.o rb_tree.o test.o
 
 CURRENT_PATH = /home/wc1229/pdlab/wcache
 LINUX_KERNEL := $(shell uname -r)
