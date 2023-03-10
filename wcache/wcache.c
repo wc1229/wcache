@@ -29,16 +29,7 @@ int __init wcache_init(void)
 
 void __exit wcache_exit(void)
 {
-    /*释放树*/
-    obj *object;
-    struct rb_node *node;
-    for (node = rb_first(&obj_tree); node; node = rb_next(node)){
-        if(rb_entry(node, obj, node)){
-            object = rb_entry(node, obj, node);
-            node_delete(object->path);
-            printk("The object freed successfully");
-        }
-    }
+    tree_delete();
 
     free_test();
 

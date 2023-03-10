@@ -2,38 +2,51 @@
 #include <linux/kernel.h>
 #include <linux/delay.h> 
 #include <linux/vmalloc.h>
+#include <linux/init.h>
+#include <linux/random.h>
+#include <linux/slab.h>
 #include "rb_tree.h"
 #include "test.h"
 
-void  *web;
-char  web_name[] = "web", web_path[] = "wc1229/path/web";
-#define WEB_SIZE (256)
+void* data[DATA];
 
-void  *img;
-char  img_name[] = "img", img_path[] = "wc1229/path/img";
-#define IMG_SIZE (512)
+static char* random_string(void){
+    char* str = kmalloc(STR_LENGTH + 1, GFP_KERNEL);
+    int i;
+
+    get_random_bytes(str, sizeof(str));
+
+    for (i = 0; i < STR_LENGTH; i++)
+        str[i]  = str[i] % 26 + 'a';
+    
+    str[STR_LENGTH] = '\0';
+
+    return str;
+}
+
+static size_t random_size(void){
+    size_t i;
+    get_random_bytes(&i, sizeof(size_t));
+    i = i%256;
+    return i;
+}
 
 void test(void){
-    web = vmalloc_user(WEB_SIZE);
-    img = vmalloc_user(IMG_SIZE);
-
-    obj_create(web_name, web, WEB_SIZE, web_path);
-    msleep(1000);
-    obj_create(img_name,  img, IMG_SIZE,  img_path);
-    msleep(1000);
-    obj_search(img_path);
+    int i;
+    size_t size;
+    for(i=0; i<DATA; i++){
+        size = random_size();
+        data[i] = vmalloc(size);
+        obj_create(random_string(), data[i], size, random_string());
+        msleep(100);
+    }
+    // obj_search(img_path);
 }
 
 void free_test(void){
-    /*释放图片对象内存*/
-    if (img) {
-        vfree(img);
-        printk(KERN_INFO "img freed successfully using vfree().\n");
+    int i;
+    for(i=0; i<DATA; i++){
+        vfree(data[i]);
     }
 
-    /*释放网页对象内存*/
-    if (web) {
-        vfree(web);
-        printk(KERN_INFO "web freed successfully using vfree().\n");
-    }
 }
