@@ -43,9 +43,7 @@ int main(int argc, char *argv[])
 
     write(sockfd, httpstring, strlen(httpstring)); 
 
-    char file[] = "data/";
-    strcat(file,argv[2]);
-    output = fopen(file, "w");
+    output = fopen(argv[2], "w");
     if(output == NULL){
         perror("failed to open output file");
         close(sockfd);
