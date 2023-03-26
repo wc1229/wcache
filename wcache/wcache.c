@@ -7,10 +7,12 @@
 #include <linux/string.h>
 #include <linux/timer.h>
 #include <linux/rbtree.h>
+#include <linux/netfilter_ipv4.h>
 #include "wcache.h"
 #include "sysfs.h"
 #include "rb_tree.h"
 #include "test.h"
+#include "hook.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("wc1229");
@@ -20,10 +22,14 @@ struct rb_root obj_tree = RB_ROOT;
 
 int __init wcache_init(void)
 {
-    test();
+    // test();
 
     create_sysfs();
     
+    nf_register_net_hook(&init_net, &pre_hook);
+    nf_register_net_hook(&init_net, &post_hook);
+    printk(KERN_INFO "init_hook\n");
+
     return 0;
 }
 
@@ -31,10 +37,13 @@ void __exit wcache_exit(void)
 {
     tree_delete();
 
-    free_test();
+    // free_test();
 
     free_sysfs();
 
+    nf_unregister_net_hook(&init_net, &pre_hook);
+    nf_unregister_net_hook(&init_net, &post_hook);
+    printk(KERN_INFO "cleanup_hook\n");
 }
 
 module_init(wcache_init);

@@ -13,8 +13,9 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("wc1229");
 MODULE_DESCRIPTION("hook");
 
-#define	CLIENT_ADDR		0xc0a8a380	/* 192.168.163.128   */
-#define	SERVER_ADDR		0xc0a8a38a	/* 192.168.163.138   */
+#define	CLIENT_ADDR		0xc0a87a01	/* 192.168.122.1   */
+#define	SERVER_ADDR		0xc0a87ade	/* 192.168.122.222   */
+#define	LO_ADDR		0x7f000001	/* 127.0.0.1   */
 
 #define NIPQUAD(addr) \
   ((unsigned char *)&addr)[0], \
@@ -50,23 +51,23 @@ static unsigned int watch_out(void *priv,
         iph  = ip_hdr(sb);
         sip = iph->saddr;
         dip = iph->daddr;
-        if (sip == htonl(SERVER_ADDR)&&dip == htonl(CLIENT_ADDR)){
+        if (sip != htonl(LO_ADDR) )
+        if (sip == htonl(SERVER_ADDR)&&dip == htonl(CLIENT_ADDR))
             printk("postPacket for source: %d.%d.%d.%d destination: %d.%d.%d.%d ", NIPQUAD(sip), NIPQUAD(dip));
             // return NF_DROP;
-        }
     }
     return NF_ACCEPT;
 }
 
 static struct nf_hook_ops pre_hook = {
     .hook = watch_in,
-    .pf = AF_INET,
+    .pf = PF_INET,
     .hooknum = NF_INET_POST_ROUTING,
-    .priority = NF_IP_PRI_FILTER,
+    .priority = NF_IP_PRI_FIRST,
 };
 static struct nf_hook_ops post_hook = {
     .hook = watch_out,
-    .pf = AF_INET,
+    .pf = PF_INET,
     .hooknum = NF_INET_PRE_ROUTING,
     .priority = NF_IP_PRI_FIRST,
 };
