@@ -116,7 +116,28 @@ void node_least_recently_used_delete(void){
     node_delete(object);
 }
 
+/*创建一个内容对象，仅保存路径和名字*/
+void obj_start_create(char *path, int path_len) {
+    int i;
+    /*为内容对象分配内存*/
+    if(temp_object)return;
+    temp_object = kmalloc(sizeof(obj), GFP_KERNEL);
+    temp_object->path = kmalloc(sizeof(char)*(path_len+1), GFP_KERNEL);
+    if(!temp_object){
+        printk(KERN_INFO"malloc faild\n");
+        return;
+    }
 
+    /*将内容信息存到对象*/
+    for (i = 0; i < path_len; i++)
+        temp_object->path[i]  = path[i] ;
+    
+    temp_object->path[path_len] = '\0';
+    temp_object->name = temp_object->path;
+
+    printk(KERN_INFO"start create a object; name:%s; path:%s;\n", temp_object->name, temp_object->path);
+    kfree(temp_object);
+}
 
 /*创建一个内容对象*/
 void obj_create(char name[], void *data, size_t size, char path[]) {

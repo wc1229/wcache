@@ -19,6 +19,7 @@ MODULE_AUTHOR("wc1229");
 MODULE_DESCRIPTION("A kernel module to allocate a 100MB cache and store struct objects in a linked list.");
 
 struct rb_root obj_tree = RB_ROOT;
+obj *temp_object = NULL;
 
 int __init wcache_init(void)
 {

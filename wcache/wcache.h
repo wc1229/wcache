@@ -17,5 +17,6 @@ typedef struct object {
 }obj;
 
 extern struct rb_root obj_tree;
+extern obj *temp_object;
 
 #endif

@@ -19,6 +19,7 @@ extern obj* node_search(struct rb_root *root, char *path);
 extern void tree_delete(void);
 extern obj* node_least_recently_used_search(void);
 // extern int node_delete(void);
+extern void obj_start_create(char *path, int path_len);
 extern void obj_create(char name[], void *data, size_t size, char path[]); 
 extern void obj_search(char path[]);
 
