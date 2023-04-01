@@ -36,8 +36,8 @@ int __init wcache_init(void)
 
 void __exit wcache_exit(void)
 {
-    tree_delete();
-
+    // skb_tree_delete();
+    skb_delete(temp_object);
     // free_test();
 
     free_sysfs();

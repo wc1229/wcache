@@ -4,6 +4,7 @@
 #include <linux/vmalloc.h>
 #include <linux/string.h>
 #include <linux/slab.h>
+#include <linux/skbuff.h>
 #include "sysfs.h"
 #include "rb_tree.h"
 #include "wcache.h"
@@ -62,11 +63,27 @@ obj* node_search(struct rb_root *root, char *path) {
     return NULL;
 }
 
+/*删除skb对象*/
+void skb_delete(obj *object){
+    if(object){
+        /*更新缓存区信息*/
+        cache_update(REDUCE, object->size);
+        /*释放相关内存*/
+        kfree(object->path);
+        kfree_skb(object->skb);
+        rb_erase(&object->node, &obj_tree);
+        kfree(object);
+        printk("The object freed successfully");
+        return;
+    }
+    printk("The object freed failed because of null");
+}
+
 /*删除对象*/
 void node_delete(obj *object){
     if(object){
         /*更新缓存区信息*/
-        cache_update(ADD, object->size);
+        cache_update(REDUCE, object->size);
         /*释放相关内存*/
         vfree(object->data);
         rb_erase(&object->node, &obj_tree);
@@ -77,10 +94,28 @@ void node_delete(obj *object){
     printk("The object freed failed because of null");
 }
 
+/*根据路径删除skb*/
+void skb_path_delete(char *path){
+    obj *object = node_search(&obj_tree, path);
+    skb_delete(object);
+}
+
 /*根据路径删除对象*/
 void node_path_delete(char *path){
     obj *object = node_search(&obj_tree, path);
     node_delete(object);
+}
+
+/*删除整个skb树*/
+void skb_tree_delete(void){
+    obj *object;
+    struct rb_node *node;
+    for (node = rb_first(&obj_tree); node; node = rb_next(node)){
+        if(rb_entry(node, obj, node)){
+            object = rb_entry(node, obj, node);
+            skb_path_delete(object->path);
+        }
+    }
 }
 
 /*删除整个树*/
@@ -134,9 +169,40 @@ void obj_start_create(char *path, int path_len) {
     
     temp_object->path[path_len] = '\0';
     temp_object->name = temp_object->path;
+    temp_object->skb = NULL;
 
     printk(KERN_INFO"start create a object; name:%s; path:%s;\n", temp_object->name, temp_object->path);
-    kfree(temp_object);
+}
+
+/*保存剩下的空内容：数据、数据大小*/
+void obj_end_create(struct sk_buff *skb, size_t size) {
+    /*为内容对象分配内存*/
+
+    // /*对象内存大于缓存区最大空间，无法缓存*/
+    // if(size > cache_size){
+    //     // vfree(buffer);
+    //     kfree(temp_object);
+    //     printk(KERN_INFO"The object %s memory is larger than the buffer space and cannot be cached\n",temp_object->name);
+    //     return;
+    // }
+
+    // /*判断缓存区是否够用，不够用则执行LRU替换*/
+    // while(size > free_space) {
+    //     printk(KERN_INFO"Insufficient cache space, Perform LRU replacement\n");
+    //     node_least_recently_used_delete();
+    // }
+    if(!temp_object)return;
+    /*将内容信息存到对象*/
+    temp_object->skb = skb;
+    temp_object->size = size;
+    temp_object->time = jiffies;
+
+    /*将新建的对象添加到列表*/
+    if(! node_insert(&obj_tree, temp_object) ){
+        printk(KERN_INFO"object %s insert failed",temp_object->name);
+    }
+    printk(KERN_INFO"create a object success; name:%s; size:%zu;path:%s;time:%ld\n", temp_object->name, temp_object->size, temp_object->path, temp_object->time);
+    // skb_delete(temp_object);
 }
 
 /*创建一个内容对象*/

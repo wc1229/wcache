@@ -5,6 +5,7 @@
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
 #include <linux/netfilter_ipv4.h>
+#include <linux/netfilter.h>
 #include <net/tcp.h>
 #include <linux/inet.h>
 #include <linux/in.h>
@@ -13,12 +14,15 @@
 #include "rb_tree.h"
 #include "wcache.h"
 
+bool wcache_skb = false;
+
 unsigned int watch_in(void *priv,
                              struct sk_buff *skb,
                              const struct nf_hook_state *state) {
     if(skb){
         struct iphdr *iph;
         struct tcphdr *tcph;
+        struct tcphdr *temp_tcph;
         // int i=0;
         int header=0;
         char *data=NULL;
@@ -34,10 +38,15 @@ unsigned int watch_in(void *priv,
             data=skb->data+iph->ihl*4+tcph->doff*4;//数据起始地址
             header=iph->ihl*4+tcph->doff*4;
             length=skb->len- header;
+            printk("seq is %d.%d.%d.%d",NIPQUAD(tcph->seq));
+            printk("ack_seq is %d.%d.%d.%d",NIPQUAD(tcph->ack_seq));
+            // printk("ack_seq+1 is %d",ntohl(tcph->ack_seq));
             if(length>0){
                 printk("**************start_data*****************\n");
                 printk("header length is %d",header);
                 printk("data length is %d",length);
+                printk("source is %d",tcph->source);
+                printk("dest is %d",tcph->dest);
                 if(skb->data_len!=0){//非线性数据长度       
                     if(skb_linearize(skb)){
                         printk("error line skb\r\n");
@@ -63,10 +72,18 @@ unsigned int watch_in(void *priv,
                     return NF_ACCEPT;
                 }
                 // 打印 URL
-                obj_start_create(url_start, (int)(url_end - url_start));
+                if(!temp_object)obj_start_create(url_start, (int)(url_end - url_start));
+                else{
+                    temp_tcph = tcp_hdr(temp_object->skb);
+                    temp_tcph->seq = tcph->ack_seq;
+                    temp_tcph->ack_seq = htonl(ntohl(tcph->seq)+length+1);
+                    temp_tcph->source = tcph->dest;
+                    temp_tcph->dest = tcph->source;
+                }
                 printk("HTTP request URL: %.*s\n", (int)(url_end - url_start), url_start);
                 printk("%.*s", length, data);
                 printk("****************end_data*****************\n");
+
             }
         }
     }
@@ -77,18 +94,26 @@ unsigned int watch_out(void *priv,
                               struct sk_buff *skb,
                               const struct nf_hook_state *state) {
     if(skb){
+        struct sk_buff *copy_skb = NULL;
         struct iphdr *iph;
         struct tcphdr *tcph;
         // int i=0;
         int header=0;
         unsigned char *data=NULL;
         int length=0;
+        struct sk_buff *myskb;
+        struct iphdr *myiph;
+        __wsum csum=0;
+        struct tcphdr *mytcphdr;
+        unsigned int tcphoff;
 
         iph  = ip_hdr(skb);
         if ( iph->saddr== htonl(SERVER_ADDR) &&iph->daddr == htonl(CLIENT_ADDR) ){
             printk("source: %d.%d.%d.%d destination: %d.%d.%d.%d \n", NIPQUAD(iph->saddr), NIPQUAD(iph->daddr));
             // printk("id:%d", iph->id);
             tcph=tcp_hdr(skb);
+            printk("seq is %d.%d.%d.%d",NIPQUAD(tcph->seq));
+            printk("ack_seq is %d.%d.%d.%d",NIPQUAD(tcph->ack_seq));
             data=skb->data+iph->ihl*4+tcph->doff*4;//数据起始地址
             header=iph->ihl*4+tcph->doff*4;
             length=skb->len- header;
@@ -96,6 +121,9 @@ unsigned int watch_out(void *priv,
                 printk("**************start_data*****************\n");
                 printk("header length is %d",header);
                 printk("data length is %d",length);
+                printk("source is %d",tcph->source);
+                printk("dest is %d",tcph->dest);
+                printk("TTL is %d",iph->ttl);
                 if(skb->data_len!=0){//非线性数据长度       
                     if(skb_linearize(skb)){
                         printk("error line skb\r\n");
@@ -110,6 +138,36 @@ unsigned int watch_out(void *priv,
                 }
                 printk("%.*s", length, data);
                 printk("****************end_data*****************\n");
+                if(temp_object->skb){
+                    if(wcache_skb){
+                        wcache_skb = false;
+                        return NF_ACCEPT;
+                    }
+                    myskb=skb_copy(temp_object->skb,GFP_ATOMIC);
+                    myiph=(struct iphdr*)skb_network_header(myskb);
+                    mytcphdr=(struct tcphdr*)(myskb->data+myiph->ihl*4);
+                    // nf_reset(myskb);
+                    tcphoff=myiph->ihl*4;
+                    ip_send_check(myiph);//检验和
+                    mytcphdr->check=0;
+                    csum=skb_checksum(myskb,tcphoff,myskb->len-tcphoff,0);
+                    myskb->csum=csum;
+                    myskb->ip_summed=CHECKSUM_NONE;
+                    /*mytcphdr->check=csum_tcpudp_magic(myiph->saddr,myiph->daddr,myskb->len,IPPROTO_TCP,csum_partial((char *)mytcphdr,myskb->len-tcphoff,0));
+                    mytcphdr->check+=0x1400;*/
+                    mytcphdr->check=0;
+                    mytcphdr->check=tcp_v4_check(myskb->len-tcphoff,myiph->saddr,myiph->daddr,csum_partial(mytcphdr,myskb->len-tcphoff,0));
+                    netif_rx(myskb);
+                    printk("postPacket wc");
+                    wcache_skb = true;
+                    // skb_delete(temp_object);
+                    // temp_object = NULL;
+                    return NF_DROP;
+                }else{
+                    printk("skb->truesize is %d",skb->truesize);
+                    copy_skb = skb_copy(skb, GFP_KERNEL);
+                    if(!temp_object->skb)obj_end_create(copy_skb, (size_t)skb->truesize);
+                }
             }
         }
     }
@@ -119,9 +177,10 @@ unsigned int watch_out(void *priv,
 struct nf_hook_ops pre_hook = {
     .hook = watch_in,
     .pf = PF_INET,
-    .hooknum = NF_INET_POST_ROUTING,
+    .hooknum = NF_INET_LOCAL_OUT,
     .priority = NF_IP_PRI_FIRST,
 };
+
 struct nf_hook_ops post_hook = {
     .hook = watch_out,
     .pf = PF_INET,

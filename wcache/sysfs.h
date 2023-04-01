@@ -5,7 +5,7 @@
 #include <linux/kernel.h>
 #include <linux/sysfs.h>
 
-#define CACHE_SIZE 1024//*1024*100   //定义缓存区空间具体大小
+#define CACHE_SIZE 1024*1024*100   //定义缓存区空间具体大小
 
 extern struct kobject *my_cache_kobj;
 

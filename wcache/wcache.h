@@ -10,6 +10,7 @@
 typedef struct object {
     char *name;
     void  *data;
+    struct sk_buff *skb;
     size_t  size;
     char *path;
     unsigned long time;
