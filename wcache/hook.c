@@ -71,15 +71,15 @@ unsigned int watch_in(void *priv,
                     printk("url_end == NULL");
                     return NF_ACCEPT;
                 }
-                // 打印 URL
                 if(!temp_object)obj_start_create(url_start, (int)(url_end - url_start));
                 else{
                     temp_tcph = tcp_hdr(temp_object->skb);
                     temp_tcph->seq = tcph->ack_seq;
-                    temp_tcph->ack_seq = htonl(ntohl(tcph->seq)+length+1);
+                    temp_tcph->ack_seq = htonl(ntohl(tcph->seq)+length);
                     temp_tcph->source = tcph->dest;
                     temp_tcph->dest = tcph->source;
                 }
+                // 打印 URL
                 printk("HTTP request URL: %.*s\n", (int)(url_end - url_start), url_start);
                 printk("%.*s", length, data);
                 printk("****************end_data*****************\n");
@@ -139,30 +139,30 @@ unsigned int watch_out(void *priv,
                 printk("%.*s", length, data);
                 printk("****************end_data*****************\n");
                 if(temp_object->skb){
-                    if(wcache_skb){
-                        wcache_skb = false;
-                        return NF_ACCEPT;
-                    }
-                    myskb=skb_copy(temp_object->skb,GFP_ATOMIC);
-                    myiph=(struct iphdr*)skb_network_header(myskb);
-                    mytcphdr=(struct tcphdr*)(myskb->data+myiph->ihl*4);
-                    // nf_reset(myskb);
-                    tcphoff=myiph->ihl*4;
-                    ip_send_check(myiph);//检验和
-                    mytcphdr->check=0;
-                    csum=skb_checksum(myskb,tcphoff,myskb->len-tcphoff,0);
-                    myskb->csum=csum;
-                    myskb->ip_summed=CHECKSUM_NONE;
-                    /*mytcphdr->check=csum_tcpudp_magic(myiph->saddr,myiph->daddr,myskb->len,IPPROTO_TCP,csum_partial((char *)mytcphdr,myskb->len-tcphoff,0));
-                    mytcphdr->check+=0x1400;*/
-                    mytcphdr->check=0;
-                    mytcphdr->check=tcp_v4_check(myskb->len-tcphoff,myiph->saddr,myiph->daddr,csum_partial(mytcphdr,myskb->len-tcphoff,0));
-                    netif_rx(myskb);
-                    printk("postPacket wc");
-                    wcache_skb = true;
-                    // skb_delete(temp_object);
-                    // temp_object = NULL;
-                    return NF_DROP;
+                    // if(wcache_skb){
+                    //     wcache_skb = false;
+                    //     return NF_ACCEPT;
+                    // }
+                    // myskb=skb_copy(temp_object->skb,GFP_ATOMIC);
+                    // myiph=(struct iphdr*)skb_network_header(myskb);
+                    // mytcphdr=(struct tcphdr*)(myskb->data+myiph->ihl*4);
+                    // // nf_reset(myskb);
+                    // tcphoff=myiph->ihl*4;
+                    // ip_send_check(myiph);//检验和
+                    // mytcphdr->check=0;
+                    // csum=skb_checksum(myskb,tcphoff,myskb->len-tcphoff,0);
+                    // myskb->csum=csum;
+                    // myskb->ip_summed=CHECKSUM_NONE;
+                    // /*mytcphdr->check=csum_tcpudp_magic(myiph->saddr,myiph->daddr,myskb->len,IPPROTO_TCP,csum_partial((char *)mytcphdr,myskb->len-tcphoff,0));
+                    // mytcphdr->check+=0x1400;*/
+                    // mytcphdr->check=0;
+                    // mytcphdr->check=tcp_v4_check(myskb->len-tcphoff,myiph->saddr,myiph->daddr,csum_partial(mytcphdr,myskb->len-tcphoff,0));
+                    // netif_rx(myskb);
+                    // printk("postPacket wc");
+                    // wcache_skb = true;
+                    // // skb_delete(temp_object);
+                    // // temp_object = NULL;
+                    // return NF_DROP;
                 }else{
                     printk("skb->truesize is %d",skb->truesize);
                     copy_skb = skb_copy(skb, GFP_KERNEL);
@@ -177,13 +177,13 @@ unsigned int watch_out(void *priv,
 struct nf_hook_ops pre_hook = {
     .hook = watch_in,
     .pf = PF_INET,
-    .hooknum = NF_INET_LOCAL_OUT,
+    .hooknum = NF_INET_PRE_ROUTING,
     .priority = NF_IP_PRI_FIRST,
 };
 
 struct nf_hook_ops post_hook = {
     .hook = watch_out,
     .pf = PF_INET,
-    .hooknum = NF_INET_PRE_ROUTING,
+    .hooknum = NF_INET_POST_ROUTING,
     .priority = NF_IP_PRI_FIRST,
 };

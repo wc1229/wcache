@@ -4,8 +4,10 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 
-#define	CLIENT_ADDR		0xc0a8a380	/* 192.168.122.1   */
-#define	SERVER_ADDR		0xc0a8a38a	/* 192.168.122.222   */
+#define	CLIENT_ADDR_163		0xc0a8a301	/* 192.168.163.1   */
+#define	SERVER_ADDR_163		0xc0a8a38a	/* 192.168.163.138   */
+#define	CLIENT_ADDR		0xc0a82902	/* 192.168.41.2   */
+#define	SERVER_ADDR		0xc0a85b63	/* 192.168.91.99   */
 #define	LO_ADDR		0x7f000001	/* 127.0.0.1   */
 
 #define NIPQUAD(addr) \
