@@ -9,9 +9,8 @@
 /*内容对象结构体*/
 typedef struct object {
     char *name;
-    void  *data;
-    struct sk_buff *skb;
-    size_t  size;
+    char  *data;
+    int  size;
     char *path;
     unsigned long time;
     struct rb_node node;
@@ -19,5 +18,6 @@ typedef struct object {
 
 extern struct rb_root obj_tree;
 extern obj *temp_object;
+extern char *temp_path;
 
 #endif

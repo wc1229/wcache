@@ -24,7 +24,7 @@ MODULE_DESCRIPTION("hook");
 #define	VM		0xc0a8f889	/* 192.168.248.137   */
 #define	SERVER_ADDR		0xc0a85b63	/* 192.168.91.99   */
 #define	LO_ADDR		0x7f000001	/* 127.0.0.1   */
-
+uint32_t sequence_number, acknowledgment_number;
 // old_skb:s:0x52:0x54:0x00:0x7c:0x40:0x7b (kvm)
 // d:0x00:0x0c:0x29:0xb0:0x35:0x0a(br0)
 
@@ -33,8 +33,6 @@ MODULE_DESCRIPTION("hook");
 
 static unsigned char src_mac[] = {0x00, 0x0c, 0x29, 0xb0, 0x35, 0x14}; //ens37 的MAC地址
 static unsigned char dst_mac[] = {0x00, 0x50, 0x56, 0xc0, 0x00, 0x01}; //VMnet1 的MAC地址
-// static unsigned char src_mac[] = {0x52, 0x54, 0x00, 0x7c, 0x40, 0x7b}; //kvm 的MAC地址
-// static unsigned char dst_mac[] = {0x00, 0x0c, 0x29, 0xb0, 0x35, 0x0a}; //br0 的MAC地址
 
 static unsigned char app_data[]  = "HTTP/1.1 200 OK\r\n"
 					   "Date: Sat, 01 Apr 2023 12:49:58 GMT\r\n"
@@ -64,8 +62,7 @@ static unsigned int watch_in(void *priv,
                              struct sk_buff *skb,
                              const struct nf_hook_state *state) {
     if(skb){
-        struct sk_buff *new_skb = alloc_skb(sizeof(struct ethhdr) + sizeof(struct iphdr) +
-                        sizeof(struct tcphdr) + sizeof(app_data), GFP_ATOMIC);
+        struct sk_buff *new_skb;
         struct net_device *dev = dev_get_by_name(&init_net, "ens37");
         unsigned char *p; 
         struct ethhdr *ethr;
@@ -77,8 +74,6 @@ static unsigned int watch_in(void *priv,
         char *url_start;
         char *url_end;
         
-        if (!new_skb)
-            return NF_ACCEPT;
         if (!dev) {
             kfree_skb(new_skb);
             return NF_ACCEPT;
@@ -86,47 +81,76 @@ static unsigned int watch_in(void *priv,
         
         old_iph = ip_hdr(skb);
         if (old_iph->saddr == htonl(CLIENT_ADDR)&&old_iph->daddr == htonl(SERVER_ADDR)){
-            // printk("postPacket for source: %d.%d.%d.%d destination: %d.%d.%d.%d ", NIPQUAD(old_iph->saddr), NIPQUAD(old_iph->daddr));
             old_tcph = tcp_hdr(skb);
-            data=skb->data+old_iph->ihl*4+old_tcph->doff*4;//数据起始地址
-            header=old_iph->ihl*4+old_tcph->doff*4;
-            length=skb->len- header;
-            if(length>0){
-                if(skb->data_len!=0){//非线性数据长度       
-                    if(skb_linearize(skb)){
-                        printk("error line skb\r\n");
-                        printk("skb->data_len %d\r\n",skb->data_len);
-                        return NF_DROP;
-                    }
-                    old_iph = ip_hdr(skb);
-                    old_tcph = tcp_hdr(skb);
-                    data=skb->data+old_iph->ihl*4+old_tcph->doff*4;//数据起始地址
-                    header=old_iph->ihl*4+old_tcph->doff*4;
-                    length=skb->len- header;
-                }
-                // 判断是否为 GET 请求
-                if (strncmp(data, "GET /index.html HTTP/1.1", 24) != 0){
-                    printk("strncmp(data, GET /index.html HTTP/1.1 , 4) != 0");
-                    return NF_ACCEPT;
-                }
-                // 查找 URL 的起始位置和结束位置
-                url_start = data + 4;
-                url_end = strchr(url_start, ' ');
-                if (url_end == NULL){
-                    printk("url_end == NULL");
-                    return NF_ACCEPT;
-                }
-                // printk("**************start_data*****************\n");
-                // printk("header length is %d",header);
-                // printk("data length is %d",length);
-                // printk("source is %d",old_tcph->source);
-                // printk("dest is %d",old_tcph->dest);
-                // // 打印 URL
-                // printk("HTTP request URL: %.*s\n", (int)(url_end - url_start), url_start);
-                // printk("%.*s", length, data);
-                // printk("****************end_data*****************\n");
-
+            if(old_tcph->fin == 1 && old_tcph->ack == 1){
                 //创建skb
+                new_skb = alloc_skb(sizeof(struct ethhdr) + sizeof(struct iphdr) +
+                        sizeof(struct tcphdr), GFP_ATOMIC);
+                skb_reserve(new_skb, sizeof(struct ethhdr) + sizeof(struct iphdr) +
+                        sizeof(struct tcphdr) );
+
+                new_skb->dev = dev;
+                    
+                /* TCP 头 */
+                p = skb_push(new_skb, sizeof(struct tcphdr));
+                skb_reset_transport_header(new_skb);
+                tcph = (struct tcphdr *)p;
+                old_tcph = tcp_hdr(skb);
+
+                tcph->source = old_tcph->dest;
+                tcph->dest = old_tcph->source;
+                tcph->seq = old_tcph->ack_seq;
+                tcph->ack_seq = old_tcph->seq;
+                tcph->doff = 5;
+                tcph->cwr = 0;
+                tcph->ece = 0;
+                tcph->urg = 0;
+                tcph->ack = 1;
+                tcph->psh = 0;
+                tcph->rst = 0;
+                tcph->syn = 0;
+                tcph->fin = 0;
+                tcph->window = htons( 29312);
+                // tcph->len = htons(sizeof(app_data) + sizeof(struct tcphdr));    // UDP 数据报长度
+                tcph->check = 0;
+                tcph->check = csum_tcpudp_magic(old_iph->daddr, old_iph->saddr, 
+                    sizeof(struct tcphdr), IPPROTO_TCP, csum_partial(tcph,sizeof(struct tcphdr),0));
+                tcph->urg_ptr = 0;
+                new_skb->ip_summed = CHECKSUM_NONE; //已经做好了校验,不需要设备校验
+
+                /* IP头 */
+                p = skb_push(new_skb, sizeof(struct iphdr));
+                skb_reset_network_header(new_skb);
+                iph = (struct iphdr *)p;
+                iph->ihl = 5;           //20 bytes
+                iph->version = 4;   //version 4
+                iph->tos = 0;
+                iph->tot_len = htons(sizeof(struct tcphdr) + sizeof(struct iphdr));
+                iph->id = 0;    
+                iph->frag_off = 64;  // 不分片
+                iph->ttl = 63;
+                iph->protocol = IPPROTO_TCP;  // UDP packet 
+                iph->saddr = old_iph->daddr;           //源IP
+                iph->daddr = old_iph->saddr;          //目的IP
+                iph->check = 0;                  //must be zero, before checksum
+                iph->check = ip_fast_csum(iph, iph->ihl); // IP 头校验
+                
+                /* MAC 头 */
+                p = skb_push(new_skb, ETH_HLEN);
+                skb_reset_mac_header(new_skb);
+                ethr = (struct ethhdr *)p;
+                memcpy(ethr->h_source, src_mac, ETH_ALEN);
+                memcpy(ethr->h_dest, dst_mac, ETH_ALEN);
+                ethr->h_proto = htons(ETH_P_IP);    // IP 数据报
+                if(dev_queue_xmit(new_skb) < 0)
+                {
+                    printk("dst_output error\n");
+                    return NF_ACCEPT;
+                }
+                // printk("tcp dst_output correct\n");
+                //创建skb
+                new_skb = alloc_skb(sizeof(struct ethhdr) + sizeof(struct iphdr) +
+                        sizeof(struct tcphdr) + sizeof(app_data), GFP_ATOMIC);
                 skb_reserve(new_skb, sizeof(struct ethhdr) + sizeof(struct iphdr) +
                         sizeof(struct tcphdr) + sizeof(app_data));
 
@@ -144,8 +168,8 @@ static unsigned int watch_in(void *priv,
 
                 tcph->source = old_tcph->dest;
                 tcph->dest = old_tcph->source;
-                tcph->seq = old_tcph->ack_seq;
-                tcph->ack_seq = htonl(ntohl(old_tcph->seq)+length);
+                tcph->seq = htonl(sequence_number);
+                tcph->ack_seq = htonl(acknowledgment_number);
                 tcph->doff = 5;
                 tcph->cwr = 0;
                 tcph->ece = 0;
@@ -188,6 +212,53 @@ static unsigned int watch_in(void *priv,
                 memcpy(ethr->h_dest, dst_mac, ETH_ALEN);
                 ethr->h_proto = htons(ETH_P_IP);    // IP 数据报
 
+                if(dev_queue_xmit(new_skb) < 0)
+                {
+                    printk("dst_output error\n");
+                    return NF_ACCEPT;
+                }
+                return NF_DROP;
+            }
+            data=skb->data+old_iph->ihl*4+old_tcph->doff*4;//数据起始地址
+            header=old_iph->ihl*4+old_tcph->doff*4;
+            length=skb->len- header;
+            if(length>0){
+                if(skb->data_len!=0){//非线性数据长度       
+                    if(skb_linearize(skb)){
+                        printk("error line skb\r\n");
+                        printk("skb->data_len %d\r\n",skb->data_len);
+                        return NF_DROP;
+                    }
+                    old_iph = ip_hdr(skb);
+                    old_tcph = tcp_hdr(skb);
+                    data=skb->data+old_iph->ihl*4+old_tcph->doff*4;//数据起始地址
+                    header=old_iph->ihl*4+old_tcph->doff*4;
+                    length=skb->len- header;
+                }
+                // 判断是否为 GET 请求
+                if (strncmp(data, "GET /index.html HTTP/1.1", 24) != 0){
+                    printk("strncmp(data, GET /index.html HTTP/1.1 , 4) != 0");
+                    return NF_ACCEPT;
+                }
+                // 查找 URL 的起始位置和结束位置
+                // url_start = data + 4;
+                // url_end = strchr(url_start, ' ');
+                // if (url_end == NULL){
+                //     printk("url_end == NULL");
+                //     return NF_ACCEPT;
+                // }
+                // printk("**************start_data*****************\n");
+                // printk("header length is %d",header);
+                // printk("data length is %d",length);
+                // printk("source is %d",old_tcph->source);
+                // printk("dest is %d",old_tcph->dest);
+                // // 打印 URL
+                // printk("HTTP request URL: %.*s\n", (int)(url_end - url_start), url_start);
+                // printk("%.*s", length, data);
+                // printk("****************end_data*****************\n");
+                sequence_number = ntohl(old_tcph->ack_seq);
+                acknowledgment_number = ntohl(old_tcph->seq)+length;
+
                 // printk("****************new_skb_start*****************\n");
                 // printk("new_skb_data_length %ld",sizeof(app_data)); 
                 // printk("tcph->source %d",tcph->source); 
@@ -223,11 +294,6 @@ static unsigned int watch_in(void *priv,
                 // printk("new_skb->len %d",new_skb->len); 
                 // printk("new_skb->dev: %s", new_skb->dev->name);
                 // printk("****************new_skb_end*****************\n");
-                if(dev_queue_xmit(new_skb) < 0)
-                {
-                    printk("dst_output error\n");
-                    return NF_ACCEPT;
-                }
                 // printk("tcp dst_output correct\n");
 
                 return NF_DROP;
@@ -248,41 +314,22 @@ static unsigned int watch_out(void *priv,
         char *data=NULL;
         old_iph  = ip_hdr(skb);
         if (old_iph->saddr == htonl(SERVER_ADDR)&&old_iph->daddr == htonl(CLIENT_ADDR)){
-            // printk("postPacket for source: %d.%d.%d.%d destination: %d.%d.%d.%d ", NIPQUAD(old_iph->saddr), NIPQUAD(old_iph->daddr));
             old_tcph  = tcp_hdr(skb);
-            data=skb->data+old_iph->ihl*4+old_tcph->doff*4;//数据起始地址
-            header=old_iph->ihl*4+old_tcph->doff*4;
-            length=skb->len- header;
-            if(length>0){
-                if(skb->data_len!=0){//非线性数据长度       
-                    if(skb_linearize(skb)){
-                        printk("error line skb\r\n");
-                        printk("skb->data_len %d\r\n",skb->data_len);
-                        return NF_DROP;
-                    }
-                    old_iph = ip_hdr(skb);
-                    old_tcph = tcp_hdr(skb);
-                    data=skb->data+old_iph->ihl*4+old_tcph->doff*4;//数据起始地址
-                    header=old_iph->ihl*4+old_tcph->doff*4;
-                    length=skb->len- header;
-                }
-                // 判断是否为 GET 请求
-                if (strncmp(data, "HTTP/1.1 200 OK", 15) != 0){
-                    printk("strncmp(data, HTTP/1.1 200 OK , 4) != 0");
-                    return NF_ACCEPT;
-                }
-                // printk("**************start_data*****************\n");
-                // printk("header length is %d",header);
-                // printk("data length is %d",length);
-                // printk("source is %d",old_tcph->source);
-                // printk("dest is %d",old_tcph->dest);
-                // printk("%.*s", length, data);
-                // printk("****************end_data*****************\n");
+            // data=skb->data+old_iph->ihl*4+old_tcph->doff*4;//数据起始地址
+            // header=old_iph->ihl*4+old_tcph->doff*4;
+            // length=skb->len- header;
+            if(old_tcph->syn == 0 && old_tcph->psh == 0){
                 // printk("****************start_signal*****************\n");
                 // printk("old_tcph->source %d",old_tcph->source); 
                 // printk("old_tcph->dest %d",old_tcph->dest); 
-                // printk("old_tcph->seq %d",old_tcph->seq); 
-                // printk("old_tcph->ack_seq %d",old_tcph->ack_seq); 
+                // printk("old_tcph->seq %u",htons(old_tcph->seq)); 
+                // printk("old_tcph->seq %u",htonl(old_tcph->seq)); 
+                // printk("old_tcph->seq %u",ntohs(old_tcph->seq)); 
+                // printk("old_tcph->seq %u",ntohl(old_tcph->seq)); 
+                // printk("old_tcph->ack_seq %u",htons(old_tcph->ack_seq)); 
+                // printk("old_tcph->ack_seq %u",htonl(old_tcph->ack_seq)); 
+                // printk("old_tcph->ack_seq %u",ntohs(old_tcph->ack_seq)); 
+                // printk("old_tcph->ack_seq %u",ntohl(old_tcph->ack_seq)); 
                 // printk("old_tcph->doff %d",old_tcph->doff); 
                 // printk("old_tcph->cwr %d",old_tcph->cwr); 
                 // printk("old_tcph->ece %d",old_tcph->ece); 
@@ -333,14 +380,14 @@ static struct nf_hook_ops post_hook = {
 
 static int __init sample_init(void) {
     nf_register_net_hook(&init_net, &pre_hook);
-    nf_register_net_hook(&init_net, &post_hook);
+    // nf_register_net_hook(&init_net, &post_hook);
     printk(KERN_INFO "init_hook\n");
     return 0;
 }
 
 static void __exit sample_exit(void) {
     nf_unregister_net_hook(&init_net, &pre_hook);
-    nf_unregister_net_hook(&init_net, &post_hook);
+    // nf_unregister_net_hook(&init_net, &post_hook);
     printk(KERN_INFO "cleanup_hook\n");
 }
 

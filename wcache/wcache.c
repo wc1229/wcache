@@ -20,6 +20,7 @@ MODULE_DESCRIPTION("A kernel module to allocate a 100MB cache and store struct o
 
 struct rb_root obj_tree = RB_ROOT;
 obj *temp_object = NULL;
+char *temp_path = NULL;
 
 int __init wcache_init(void)
 {
@@ -36,8 +37,8 @@ int __init wcache_init(void)
 
 void __exit wcache_exit(void)
 {
-    // skb_tree_delete();
-    skb_delete(temp_object);
+    tree_delete();
+    // skb_delete(temp_object);
     // free_test();
 
     free_sysfs();

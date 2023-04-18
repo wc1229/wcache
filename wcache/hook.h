@@ -6,7 +6,8 @@
 
 #define	CLIENT_ADDR_163		0xc0a8a301	/* 192.168.163.1   */
 #define	SERVER_ADDR_163		0xc0a8a38a	/* 192.168.163.138   */
-#define	CLIENT_ADDR		0xc0a82902	/* 192.168.41.2   */
+#define	CLIENT_ADDR		0xc0a8f803	/* 192.168.248.3   */
+#define	VM		0xc0a8f889	/* 192.168.248.137   */
 #define	SERVER_ADDR		0xc0a85b63	/* 192.168.91.99   */
 #define	LO_ADDR		0x7f000001	/* 127.0.0.1   */
 

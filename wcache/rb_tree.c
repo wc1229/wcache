@@ -63,21 +63,21 @@ obj* node_search(struct rb_root *root, char *path) {
     return NULL;
 }
 
-/*删除skb对象*/
-void skb_delete(obj *object){
-    if(object){
-        /*更新缓存区信息*/
-        cache_update(REDUCE, object->size);
-        /*释放相关内存*/
-        kfree(object->path);
-        kfree_skb(object->skb);
-        rb_erase(&object->node, &obj_tree);
-        kfree(object);
-        printk("The object freed successfully");
-        return;
-    }
-    printk("The object freed failed because of null");
-}
+// /*删除skb对象*/
+// void skb_delete(obj *object){
+//     if(object){
+//         /*更新缓存区信息*/
+//         cache_update(REDUCE, object->size);
+//         /*释放相关内存*/
+//         kfree(object->path);
+//         kfree_skb(object->skb);
+//         rb_erase(&object->node, &obj_tree);
+//         kfree(object);
+//         printk("The object freed successfully");
+//         return;
+//     }
+//     printk("The object freed failed because of null");
+// }
 
 /*删除对象*/
 void node_delete(obj *object){
@@ -85,7 +85,9 @@ void node_delete(obj *object){
         /*更新缓存区信息*/
         cache_update(REDUCE, object->size);
         /*释放相关内存*/
-        vfree(object->data);
+        if(object->data)kfree(object->data);
+        if(object->path)kfree(object->path);
+        if(object->name)kfree(object->name);
         rb_erase(&object->node, &obj_tree);
         kfree(object);
         printk("The object freed successfully");
@@ -94,11 +96,11 @@ void node_delete(obj *object){
     printk("The object freed failed because of null");
 }
 
-/*根据路径删除skb*/
-void skb_path_delete(char *path){
-    obj *object = node_search(&obj_tree, path);
-    skb_delete(object);
-}
+// /*根据路径删除skb*/
+// void skb_path_delete(char *path){
+//     obj *object = node_search(&obj_tree, path);
+//     skb_delete(object);
+// }
 
 /*根据路径删除对象*/
 void node_path_delete(char *path){
@@ -106,17 +108,17 @@ void node_path_delete(char *path){
     node_delete(object);
 }
 
-/*删除整个skb树*/
-void skb_tree_delete(void){
-    obj *object;
-    struct rb_node *node;
-    for (node = rb_first(&obj_tree); node; node = rb_next(node)){
-        if(rb_entry(node, obj, node)){
-            object = rb_entry(node, obj, node);
-            skb_path_delete(object->path);
-        }
-    }
-}
+// /*删除整个skb树*/
+// void skb_tree_delete(void){
+//     obj *object;
+//     struct rb_node *node;
+//     for (node = rb_first(&obj_tree); node; node = rb_next(node)){
+//         if(rb_entry(node, obj, node)){
+//             object = rb_entry(node, obj, node);
+//             skb_path_delete(object->path);
+//         }
+//     }
+// }
 
 /*删除整个树*/
 void tree_delete(void){
@@ -169,13 +171,17 @@ void obj_start_create(char *path, int path_len) {
     
     temp_object->path[path_len] = '\0';
     temp_object->name = temp_object->path;
-    temp_object->skb = NULL;
 
+    /*将新建的对象添加到列表*/
+    if(! node_insert(&obj_tree, temp_object) ){
+        printk(KERN_INFO"object %s insert failed",temp_object->name);
+    }
+    
     printk(KERN_INFO"start create a object; name:%s; path:%s;\n", temp_object->name, temp_object->path);
 }
 
 /*保存剩下的空内容：数据、数据大小*/
-void obj_end_create(struct sk_buff *skb, size_t size) {
+void obj_end_create(char *data, size_t size) {
     /*为内容对象分配内存*/
 
     // /*对象内存大于缓存区最大空间，无法缓存*/
@@ -193,41 +199,42 @@ void obj_end_create(struct sk_buff *skb, size_t size) {
     // }
     if(!temp_object)return;
     /*将内容信息存到对象*/
-    temp_object->skb = skb;
     temp_object->size = size;
     temp_object->time = jiffies;
 
-    /*将新建的对象添加到列表*/
-    if(! node_insert(&obj_tree, temp_object) ){
-        printk(KERN_INFO"object %s insert failed",temp_object->name);
-    }
-    printk(KERN_INFO"create a object success; name:%s; size:%zu;path:%s;time:%ld\n", temp_object->name, temp_object->size, temp_object->path, temp_object->time);
+    // /*将新建的对象添加到列表*/
+    // if(! node_insert(&obj_tree, temp_object) ){
+    //     printk(KERN_INFO"object %s insert failed",temp_object->name);
+    // }
+    // printk(KERN_INFO"create a object success; name:%s; size:%zu;path:%s;time:%ld\n", temp_object->name, temp_object->size, temp_object->path, temp_object->time);
     // skb_delete(temp_object);
 }
 
 /*创建一个内容对象*/
-void obj_create(char name[], void *data, size_t size, char path[]) {
+void obj_create(char name[], char *data, int size, char path[]) {
     /*为内容对象分配内存*/
-    void *buffer = vmalloc(size);
-    obj *new_obj = kmalloc(sizeof(obj),GFP_KERNEL);
+    void *buffer = kmalloc(size, GFP_KERNEL);
+    obj *new_obj = kmalloc(sizeof(obj), GFP_KERNEL);
+    // kfree(buffer);
     if(!new_obj){
         printk(KERN_INFO"malloc faild\n");
         return;
     }
 
-    /*对象内存大于缓存区最大空间，无法缓存*/
-    if(size > cache_size){
-        vfree(buffer);
-        kfree(new_obj);
-        printk(KERN_INFO"The object %s memory is larger than the buffer space and cannot be cached\n",name);
-        return;
-    }
+    // /*对象内存大于缓存区最大空间，无法缓存*/
+    // if(size > cache_size){
+    //     kfree(buffer);
+    //     kfree(path);
+    //     kfree(new_obj);
+    //     printk(KERN_INFO"The object %s memory is larger than the buffer space and cannot be cached\n",name);
+    //     return;
+    // }
 
-    /*判断缓存区是否够用，不够用则执行LRU替换*/
-    while(size > free_space) {
-        printk(KERN_INFO"Insufficient cache space, Perform LRU replacement\n");
-        node_least_recently_used_delete();
-    }
+    // /*判断缓存区是否够用，不够用则执行LRU替换*/
+    // while(size > free_space) {
+    //     printk(KERN_INFO"Insufficient cache space, Perform LRU replacement\n");
+    //     node_least_recently_used_delete();
+    // }
     
     /*将内容信息存到对象*/
     memcpy(buffer, data, size);
@@ -241,7 +248,7 @@ void obj_create(char name[], void *data, size_t size, char path[]) {
     if(! node_insert(&obj_tree, new_obj) ){
         printk(KERN_INFO"object %s insert failed",name);
     }
-    printk(KERN_INFO"create a object success; name:%s; size:%zu;path:%s;time:%ld\n", new_obj->name, new_obj->size, new_obj->path, new_obj->time);
+    printk(KERN_INFO"create a object success; name:%s; size:%d;path:%s;time:%ld\n", new_obj->name, new_obj->size, new_obj->path, new_obj->time);
 }
 
 void obj_search(char *path){
